@@ -1,0 +1,46 @@
+/* ── Repair Estimator Floating Button ─────────────────────────────────────── */
+
+#re-float-btn {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #0d9488;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 24px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  white-space: nowrap;
+}
+
+#re-float-btn:hover {
+  background: #0f766e;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  transform: translateY(-1px);
+}
+
+#re-float-btn:active {
+  transform: scale(0.97);
+}
+
+#re-float-btn .re-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+#re-float-btn.re-success {
+  background: #047857;
+}
+
+#re-float-btn.re-error {
+  background: #c0392b;
+}
