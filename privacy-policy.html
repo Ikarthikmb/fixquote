@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FixQuote – Privacy Policy</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           max-width: 740px; margin: 48px auto; padding: 0 24px;
+           color: #1a1a1a; line-height: 1.7; }
+    h1   { color: #0d9488; margin-bottom: 4px; }
+    h2   { color: #134e4a; margin-top: 36px; }
+    .meta { color: #666; font-size: 14px; margin-bottom: 32px; }
+    ul   { padding-left: 20px; }
+    li   { margin-bottom: 6px; }
+    a    { color: #0d9488; }
+    hr   { border: none; border-top: 1px solid #e5e7eb; margin: 36px 0; }
+  </style>
+</head>
+<body>
+
+  <h1>FixQuote Privacy Policy</h1>
+  <p class="meta">Last updated: June 2026</p>
+
+  <p>FixQuote ("the extension") is a Chrome extension that helps repair technicians build
+  accurate repair estimates by capturing part prices from supplier websites. This policy
+  explains what data the extension collects, how it is used, and how it is stored.</p>
+
+  <h2>1. Data We Collect</h2>
+  <ul>
+    <li><strong>Account credentials</strong> – If you create an account, your email address
+        and a hashed password are stored securely via Firebase Authentication (Google LLC).
+        We never see or store your password in plain text.</li>
+    <li><strong>Estimate data</strong> – Repair estimates, job history, labour rates, tax
+        settings, and customer names you enter are stored locally on your device and,
+        if you are signed in, synced to your private Firestore database.</li>
+    <li><strong>Product information</strong> – When you use "Grab from Page", the extension
+        reads the product name and price visible on the current supplier tab. This data
+        is stored only in your estimate and is never sent to our servers independently.</li>
+    <li><strong>Authentication token</strong> – A session token is stored in
+        <code>chrome.storage.local</code> to keep you signed in. It is never shared
+        with third parties.</li>
+  </ul>
+
+  <h2>2. Data We Do Not Collect</h2>
+  <ul>
+    <li>Browsing history or any data from websites other than the supported supplier pages
+        you actively interact with.</li>
+    <li>Payment or financial information of any kind.</li>
+    <li>Location data.</li>
+    <li>Any data from pages other than supported supplier sites
+        (phonelcdparts.com, mobilesentrix.com, ebay.com).</li>
+  </ul>
+
+  <h2>3. How Data Is Used</h2>
+  <p>All data collected is used solely to provide the core functionality of FixQuote:</p>
+  <ul>
+    <li>Generating and saving repair estimates.</li>
+    <li>Syncing your job history and settings across devices when you are signed in.</li>
+    <li>Authenticating your account.</li>
+  </ul>
+  <p>We do not sell, share, or use your data for advertising or analytics.</p>
+
+  <h2>4. Data Storage and Security</h2>
+  <ul>
+    <li><strong>Local storage</strong> – Estimate data is cached in
+        <code>chrome.storage.local</code> on your device.</li>
+    <li><strong>Cloud storage</strong> – If you create an account, data is synced to
+        Google Firestore under your unique user ID. Access is protected by Firestore
+        security rules that allow only your account to read or write your data.</li>
+    <li><strong>Firebase Authentication</strong> – Managed by Google Firebase. See
+        <a href="https://firebase.google.com/support/privacy" target="_blank">
+        Firebase Privacy Policy</a>.</li>
+  </ul>
+
+  <h2>5. Third-Party Services</h2>
+  <p>FixQuote uses the following Google services, subject to
+  <a href="https://policies.google.com/privacy" target="_blank">Google's Privacy Policy</a>:</p>
+  <ul>
+    <li>Firebase Authentication – account creation and sign-in.</li>
+    <li>Cloud Firestore – cloud storage of your estimate data.</li>
+    <li>Google Identity (optional) – Google Sign-In, if you choose to use it.</li>
+  </ul>
+
+  <h2>6. Data Retention and Deletion</h2>
+  <p>Your data is retained as long as your account exists. To delete all cloud data,
+  sign in, then contact us at the email below and we will permanently delete your
+  Firestore records. Local data can be cleared by uninstalling the extension or
+  clearing extension storage in Chrome settings.</p>
+
+  <h2>7. Children's Privacy</h2>
+  <p>FixQuote is not directed at children under 13. We do not knowingly collect data
+  from children.</p>
+
+  <h2>8. Changes to This Policy</h2>
+  <p>We may update this policy occasionally. The "Last updated" date at the top will
+  reflect any changes. Continued use of the extension after an update constitutes
+  acceptance of the new policy.</p>
+
+  <h2>9. Contact</h2>
+  <p>Questions? Email us at:
+  <a href="mailto:karthikmb8@gmail.com">karthikmb8@gmail.com</a></p>
+
+  <hr />
+  <p style="font-size:13px; color:#888;">FixQuote is an independent product and is not
+  affiliated with Google, Apple, or any supplier website.</p>
+
+</body>
+</html>
