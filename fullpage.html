@@ -262,6 +262,101 @@
     #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1c1e21; color: #fff; padding: 9px 20px; border-radius: 24px; font-size: 13px; font-weight: 500; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 9999; white-space: nowrap; }
     #toast.show { opacity: 1; }
 
+    /* ── Support & Feedback Tab ──────────────────────────────────────────── */
+    .fq-support-layout { max-width: 640px; margin: 0 auto; padding: 28px 20px 48px; }
+    .fqs-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:22px; }
+    .fqs-title  { font-size:18px; font-weight:800; margin-bottom:4px; }
+    .fqs-sub    { font-size:13px; color:var(--muted); line-height:1.5; }
+    .btn-new-ticket {
+      background:var(--primary); color:#fff; border:none;
+      border-radius:9px; padding:9px 20px; font-size:13px; font-weight:700;
+      cursor:pointer; white-space:nowrap; flex-shrink:0;
+    }
+    .btn-new-ticket:hover { background:var(--primary-hover); }
+
+    /* New ticket form */
+    .new-ticket-form {
+      background:var(--card); border:1px solid var(--primary); border-radius:var(--radius);
+      padding:20px; margin-bottom:20px; display:flex; flex-direction:column; gap:14px;
+      box-shadow:0 0 0 4px var(--primary-light);
+    }
+    .fb-field { display:flex; flex-direction:column; gap:6px; }
+    .fb-label { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+    .fb-select, .fb-textarea {
+      border:1px solid var(--border); border-radius:8px;
+      padding:10px 13px; font-size:13px; font-family:inherit;
+      background:var(--bg); width:100%;
+    }
+    .fb-select:focus, .fb-textarea:focus { outline:none; border-color:var(--primary); background:#fff; }
+    .fb-textarea { resize:vertical; min-height:100px; line-height:1.6; }
+    .fb-select {
+      appearance:none; cursor:pointer;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 12px center; padding-right:32px;
+    }
+    .fb-error { background:#fef2f2; color:var(--red); border:1px solid #fecaca; border-radius:8px; padding:10px 13px; font-size:13px; }
+    .ntf-actions { display:flex; gap:10px; justify-content:flex-end; }
+    .btn-ntf-cancel { background:none; border:1px solid var(--border); border-radius:8px; padding:9px 18px; font-size:13px; cursor:pointer; color:var(--muted); }
+    .btn-ntf-cancel:hover { background:var(--bg); }
+    .btn-ntf-submit { background:var(--primary); color:#fff; border:none; border-radius:8px; padding:9px 22px; font-size:13px; font-weight:700; cursor:pointer; }
+    .btn-ntf-submit:hover { background:var(--primary-hover); }
+    .btn-ntf-submit:disabled { opacity:0.55; cursor:not-allowed; }
+
+    /* Ticket cards (user side) */
+    .fq-ticket-list-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin-bottom:10px; }
+    .utc { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:10px; overflow:hidden; transition:box-shadow 0.15s; }
+    .utc:hover { box-shadow:0 2px 10px rgba(0,0,0,0.08); }
+    .utc-header { display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer; user-select:none; }
+    .utc-cat-icon { font-size:20px; flex-shrink:0; }
+    .utc-info { flex:1; min-width:0; }
+    .utc-subject { font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .utc-meta    { font-size:11px; color:var(--muted); margin-top:3px; }
+    .utc-meta strong { color:var(--primary-hover); }
+    .utc-badge { font-size:11px; font-weight:700; padding:3px 9px; border-radius:12px; flex-shrink:0; }
+    .utc-badge.open        { background:#dcfce7; color:#166534; }
+    .utc-badge.in_progress { background:#fef9c3; color:#854d0e; }
+    .utc-badge.resolved    { background:#f1f5f9; color:#64748b; }
+    .utc-chevron { color:var(--muted); font-size:11px; transition:transform 0.2s; flex-shrink:0; margin-left:4px; }
+    .utc.expanded .utc-chevron { transform:rotate(180deg); }
+    .utc-body { display:none; border-top:1px solid var(--border); }
+    .utc.expanded .utc-body { display:block; }
+    .utc-thread { padding:16px; display:flex; flex-direction:column; gap:10px; max-height:320px; overflow-y:auto; }
+    .utc-msg { display:flex; flex-direction:column; }
+    .utc-msg.user  { align-items:flex-end; }
+    .utc-msg.admin { align-items:flex-start; }
+    .utc-by   { font-size:10px; font-weight:700; color:var(--orange,#f59e0b); margin-bottom:3px; }
+    .utc-bubble { padding:9px 13px; border-radius:14px; font-size:13px; line-height:1.55; max-width:85%; }
+    .utc-msg.user  .utc-bubble { background:var(--primary); color:#fff; border-radius:14px 14px 2px 14px; }
+    .utc-msg.admin .utc-bubble { background:var(--bg); border:1px solid var(--border); border-radius:2px 14px 14px 14px; }
+    .utc-time { font-size:10px; color:var(--muted); margin-top:3px; }
+    .utc-reply-bar { border-top:1px solid var(--border); padding:10px 14px; display:flex; gap:8px; align-items:flex-end; }
+    .utc-reply-input { flex:1; border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:13px; font-family:inherit; resize:none; min-height:36px; max-height:100px; overflow-y:auto; line-height:1.45; }
+    .utc-reply-input:focus { outline:none; border-color:var(--primary); }
+    .btn-utc-send { background:var(--primary); color:#fff; border:none; border-radius:10px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer; flex-shrink:0; }
+    .btn-utc-send:hover { background:var(--primary-hover); }
+    .btn-utc-send:disabled { opacity:0.5; cursor:not-allowed; }
+    .utc-resolved-note { text-align:center; padding:12px; font-size:12px; color:var(--muted); border-top:1px solid var(--border); background:#f8fafc; }
+    .btn-utc-reopen { background:none; border:none; color:var(--primary); font-size:12px; font-weight:700; cursor:pointer; padding:0 4px; }
+
+    /* Empty state + divider */
+    .fqs-empty { text-align:center; padding:40px 20px; color:var(--muted); }
+    .fqs-empty .icon { font-size:40px; margin-bottom:12px; }
+    .fqs-empty h3 { font-size:15px; font-weight:700; margin-bottom:6px; color:var(--text); }
+    .fqs-empty p  { font-size:13px; line-height:1.6; }
+    .fqs-guest-note { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; text-align:center; }
+    .fqs-guest-note p { font-size:13px; color:var(--muted); line-height:1.6; }
+    .fqs-divider { height:1px; background:var(--border); margin:28px 0; }
+
+    /* One-way feedback section */
+    .fqs-fb-section { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+    .fqsf-header { display:flex; justify-content:space-between; align-items:center; padding:13px 16px; cursor:pointer; font-size:13px; font-weight:600; user-select:none; }
+    .fqsf-header:hover { background:var(--bg); }
+    .fqsf-arrow { color:var(--muted); font-size:11px; transition:transform 0.2s; }
+    .fqsf-body { padding:0 16px 16px; display:flex; flex-direction:column; gap:10px; }
+    .btn-submit-fb { background:var(--primary); color:#fff; border:none; border-radius:8px; padding:10px; font-size:13px; font-weight:700; cursor:pointer; width:100%; }
+    .btn-submit-fb:hover { background:var(--primary-hover); }
+    .btn-submit-fb:disabled { opacity:0.55; cursor:not-allowed; }
+
     /* ── Auth overlay ────────────────────────────────────────────────────── */
     .auth-overlay { position: fixed; inset: 0; z-index: 10000; background: var(--header-bg); display: flex; align-items: center; justify-content: center; }
     .auth-overlay.hidden { display: none; }
@@ -295,6 +390,9 @@
     <button class="tab-btn active" data-tab="estimate">📋 Estimate</button>
     <button class="tab-btn"        data-tab="labour">⚙ Labour Editor</button>
     <button class="tab-btn"        data-tab="history">📁 History</button>
+    <button class="tab-btn"        data-tab="feedback">💬 Feedback</button>
+    <!-- Admin link — only visible to publisher, injected by JS -->
+    <button class="tab-btn" id="btnAdminLink" style="display:none" data-tab="__admin">🔑 Admin</button>
   </nav>
   <div class="hdr-actions">
     <input class="customer-input" id="customerName" type="text" placeholder="Customer / Job #…" />
@@ -393,6 +491,62 @@
       <button class="btn-modal-close" id="btnModalClose">×</button>
     </div>
     <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ── Support & Feedback Tab ─────────────────────────────────────────────── -->
+<div id="tab-feedback" class="tab-panel">
+  <div class="fq-support-layout">
+
+    <!-- Header -->
+    <div class="fqs-header">
+      <div>
+        <h2 class="fqs-title">🎧 Support</h2>
+        <p class="fqs-sub">Submit a ticket and chat with us. We typically reply within 24 hours.</p>
+      </div>
+      <button class="btn-new-ticket" id="btnNewTicket">+ New Ticket</button>
+    </div>
+
+    <!-- New ticket form (hidden by default) -->
+    <div class="new-ticket-form" id="newTicketForm" style="display:none">
+      <div id="ntfError" class="fb-error" style="display:none"></div>
+      <div class="fb-field">
+        <label class="fb-label" for="ntfCategory">Category</label>
+        <select class="fb-select" id="ntfCategory">
+          <option value="bug">🐛 Bug Report</option>
+          <option value="feature">✨ Feature Request</option>
+          <option value="question">❓ Question</option>
+        </select>
+      </div>
+      <div class="fb-field">
+        <label class="fb-label" for="ntfMessage">Describe the issue <span style="color:var(--red);font-weight:400;text-transform:none">*</span></label>
+        <textarea class="fb-textarea" id="ntfMessage" placeholder="Include as much detail as you like…" rows="4"></textarea>
+      </div>
+      <div class="ntf-actions">
+        <button class="btn-ntf-cancel" id="btnNtfCancel">Cancel</button>
+        <button class="btn-ntf-submit" id="btnNtfSubmit">Submit Ticket</button>
+      </div>
+    </div>
+
+    <!-- Ticket list (populated by JS) -->
+    <div id="fqTicketList"></div>
+
+    <div class="fqs-divider"></div>
+
+    <!-- One-way feedback (collapsible) -->
+    <div class="fqs-fb-section">
+      <div class="fqsf-header" id="btnToggleFeedback">
+        <span>📣 Send quick feedback</span>
+        <span class="fqsf-arrow">▼</span>
+      </div>
+      <div class="fqsf-body" id="fqsfBody" style="display:none">
+        <div id="fqsfError" class="fb-error" style="display:none"></div>
+        <textarea class="fb-textarea" id="fqsfMessage" placeholder="Suggestions, compliments, anything on your mind…" rows="3"></textarea>
+        <button class="btn-submit-fb" id="btnSubmitFeedback">Send Feedback</button>
+        <div id="fqsfSuccess" style="display:none;text-align:center;padding:12px;font-size:13px;font-weight:700;color:var(--primary)">✅ Thanks for your feedback!</div>
+      </div>
+    </div>
+
   </div>
 </div>
 

@@ -531,6 +531,11 @@ document.getElementById("customerName").addEventListener("input", (e) => {
 // ── Tabs ───────────────────────────────────────────────────────────────────────
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
+    // Admin link opens admin page in a new tab
+    if (btn.dataset.tab === "__admin") {
+      chrome.tabs.create({ url: chrome.runtime.getURL("admin.html") });
+      return;
+    }
     document.querySelectorAll(".tab-btn,.tab-panel").forEach(el => el.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
@@ -741,8 +746,15 @@ async function _onAuthSuccess() {
   const sess = await fqGetSession();
   document.getElementById("authOverlay").classList.add("hidden");
   _addSignOutBtn(sess);
+  _showAdminLinkIfPublisher(sess);
   await fqSyncFromCloud();
   loadAll();
+}
+
+function _showAdminLinkIfPublisher(sess) {
+  if (sess?.email === FQ_ADMIN_EMAIL) {
+    document.getElementById("btnAdminLink").style.display = "";
+  }
 }
 
 function _addSignOutBtn(sess) {
@@ -767,7 +779,283 @@ function _addSignOutBtn(sess) {
   } else {
     document.getElementById("authOverlay").classList.add("hidden");
     _addSignOutBtn(sess);
+    _showAdminLinkIfPublisher(sess);
     await fqSyncFromCloud();
     loadAll();
   }
+
+  // Handle ?tab=<name> URL param (e.g. from sidebar 💬 button)
+  const urlTab = new URLSearchParams(location.search).get("tab");
+  if (urlTab && document.getElementById(`tab-${urlTab}`)) {
+    document.querySelectorAll(".tab-btn,.tab-panel").forEach(el => el.classList.remove("active"));
+    const btn = document.querySelector(`[data-tab="${urlTab}"]`);
+    if (btn) btn.classList.add("active");
+    document.getElementById(`tab-${urlTab}`).classList.add("active");
+    if (urlTab === "feedback") _initFeedbackTab(sess);
+  }
 })();
+
+// ── Support & Feedback Tab ────────────────────────────────────────────────────
+
+const FQ_CAT_ICONS   = { bug:"🐛", feature:"✨", question:"❓", feedback:"📣" };
+const FQ_CAT_LABELS  = { bug:"Bug Report", feature:"Feature Request", question:"Question", feedback:"Feedback" };
+let _userTickets  = [];
+let _pollInterval = null;
+
+function _fmtTs(ts) {
+  if (!ts) return "";
+  const d = new Date(ts), now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString(undefined, { hour:"2-digit", minute:"2-digit" })
+    : d.toLocaleDateString(undefined, { month:"short", day:"numeric" }) + " " +
+      d.toLocaleTimeString(undefined, { hour:"2-digit", minute:"2-digit" });
+}
+
+function _threadHtml(ticket) {
+  const msgs = ticket.messages || [];
+  if (!msgs.length) return `<div style="text-align:center;color:var(--muted);padding:16px;font-size:13px">No messages yet</div>`;
+  return msgs.map(m => {
+    const isAdmin = m.type === "admin";
+    return `<div class="utc-msg ${isAdmin ? "admin" : "user"}">
+      ${isAdmin ? `<div class="utc-by">Admin</div>` : ""}
+      <div class="utc-bubble">${esc(m.text).replace(/\n/g,"<br>")}</div>
+      <div class="utc-time">${_fmtTs(m.ts)}</div>
+    </div>`;
+  }).join("");
+}
+
+function _ticketCardHtml(t) {
+  const status  = t.status || "open";
+  const icon    = FQ_CAT_ICONS[t.category]  || "💬";
+  const label   = FQ_CAT_LABELS[t.category] || t.category;
+  const hasReply = (t.messages || []).some(m => m.type === "admin");
+  const statusText = { open:"Open", in_progress:"In Progress", resolved:"Resolved" }[status] || status;
+
+  const replyArea = status === "resolved"
+    ? `<div class="utc-resolved-note">✓ Resolved — <button class="btn-utc-reopen" data-id="${esc(t.id)}">Reopen</button></div>`
+    : `<div class="utc-reply-bar">
+        <textarea class="utc-reply-input" data-id="${esc(t.id)}" placeholder="Reply…" rows="1"></textarea>
+        <button class="btn-utc-send" data-id="${esc(t.id)}">Send</button>
+      </div>`;
+
+  return `<div class="utc" data-id="${esc(t.id)}">
+    <div class="utc-header">
+      <div class="utc-cat-icon">${icon}</div>
+      <div class="utc-info">
+        <div class="utc-subject">${esc(t.subject || "(no subject)")}</div>
+        <div class="utc-meta">${esc(label)} · ${_fmtTs(t.createdAt)}${hasReply ? " · <strong>Admin replied</strong>" : ""}</div>
+      </div>
+      <span class="utc-badge ${status}">${statusText}</span>
+      <span class="utc-chevron">▼</span>
+    </div>
+    <div class="utc-body">
+      <div class="utc-thread" id="thread-${esc(t.id)}">${_threadHtml(t)}</div>
+      ${replyArea}
+    </div>
+  </div>`;
+}
+
+function _renderTicketList() {
+  const el = document.getElementById("fqTicketList");
+  const tickets = _userTickets.filter(t => t.category !== "feedback");
+
+  if (!tickets.length) {
+    el.innerHTML = `<div class="fqs-empty">
+      <div class="icon">🎫</div>
+      <h3>No tickets yet</h3>
+      <p>Click <strong>+ New Ticket</strong> to report a bug, ask a question, or request a feature. We'll reply right here.</p>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="fq-ticket-list-label">My Tickets (${tickets.length})</div>` +
+    tickets.map(_ticketCardHtml).join("");
+
+  _bindTicketEvents(el);
+}
+
+function _bindTicketEvents(container) {
+  // Toggle expand/collapse
+  container.querySelectorAll(".utc-header").forEach(h => {
+    h.addEventListener("click", () => {
+      const card = h.closest(".utc");
+      const opening = !card.classList.contains("expanded");
+      container.querySelectorAll(".utc.expanded").forEach(c => c.classList.remove("expanded"));
+      if (opening) {
+        card.classList.add("expanded");
+        const thread = card.querySelector(".utc-thread");
+        if (thread) requestAnimationFrame(() => { thread.scrollTop = thread.scrollHeight; });
+      }
+    });
+  });
+
+  // Send reply
+  container.querySelectorAll(".btn-utc-send").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id   = btn.dataset.id;
+      const ta   = container.querySelector(`.utc-reply-input[data-id="${id}"]`);
+      const text = ta?.value?.trim();
+      if (!text) return;
+      btn.disabled = true; btn.textContent = "…";
+      try {
+        await fqUserReply(id, text);
+        ta.value = ""; ta.style.height = "";
+        _userTickets = await fqGetUserTickets();
+        // Patch just this card's thread without full re-render to keep expand state
+        const thread = document.getElementById(`thread-${id}`);
+        const t = _userTickets.find(x => x.id === id);
+        if (thread && t) { thread.innerHTML = _threadHtml(t); thread.scrollTop = thread.scrollHeight; }
+      } catch (e) { showToast("Error sending reply: " + e.message); }
+      btn.disabled = false; btn.textContent = "Send";
+    });
+  });
+
+  // Reopen resolved ticket
+  container.querySelectorAll(".btn-utc-reopen").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        await fqUserReply(btn.dataset.id, "Reopening this ticket.");
+        _userTickets = await fqGetUserTickets();
+        _renderTicketList();
+      } catch {}
+    });
+  });
+
+  // Auto-resize + Enter-to-send on reply textareas
+  container.querySelectorAll(".utc-reply-input").forEach(ta => {
+    ta.addEventListener("input", () => {
+      ta.style.height = "auto";
+      ta.style.height = Math.min(ta.scrollHeight, 100) + "px";
+    });
+    ta.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        container.querySelector(`.btn-utc-send[data-id="${ta.dataset.id}"]`)?.click();
+      }
+    });
+  });
+}
+
+// ── New ticket form ────────────────────────────────────────────────────────────
+let _feedbackInitDone = false;
+
+async function _initFeedbackTab(sess) {
+  if (_feedbackInitDone) {
+    // Already wired; just refresh tickets
+    if (sess) { _userTickets = await fqGetUserTickets(); _renderTicketList(); }
+    return;
+  }
+  _feedbackInitDone = true;
+
+  // Show guest note if not signed in
+  if (!sess) {
+    document.getElementById("btnNewTicket").disabled = true;
+    document.getElementById("btnNewTicket").title = "Sign in to submit tickets";
+    document.getElementById("fqTicketList").innerHTML = `
+      <div class="fqs-guest-note">
+        <p>🔒 Sign in to submit support tickets and chat with us.<br>
+        You can still use the quick feedback box below.</p>
+      </div>`;
+  }
+
+  // + New Ticket toggle
+  document.getElementById("btnNewTicket").addEventListener("click", () => {
+    const form = document.getElementById("newTicketForm");
+    const opening = form.style.display === "none";
+    form.style.display = opening ? "" : "none";
+    if (opening) document.getElementById("ntfMessage").focus();
+  });
+
+  // Cancel new ticket
+  document.getElementById("btnNtfCancel").addEventListener("click", () => {
+    document.getElementById("newTicketForm").style.display = "none";
+    document.getElementById("ntfMessage").value = "";
+    document.getElementById("ntfError").style.display = "none";
+  });
+
+  // Submit new ticket
+  document.getElementById("btnNtfSubmit").addEventListener("click", async () => {
+    const category = document.getElementById("ntfCategory").value;
+    const message  = document.getElementById("ntfMessage").value.trim();
+    const errEl    = document.getElementById("ntfError");
+    errEl.style.display = "none";
+    if (!message) { errEl.textContent = "Please describe the issue."; errEl.style.display = ""; return; }
+
+    const btn = document.getElementById("btnNtfSubmit");
+    btn.disabled = true; btn.textContent = "Submitting…";
+    try {
+      await fqCreateTicket(category, null, message);
+      _userTickets = await fqGetUserTickets();
+      _renderTicketList();
+      document.getElementById("newTicketForm").style.display = "none";
+      document.getElementById("ntfMessage").value = "";
+      showToast("✅ Ticket submitted!");
+    } catch (e) {
+      errEl.textContent = "Failed to submit. " + (e.message || "Try again.");
+      errEl.style.display = "";
+    }
+    btn.disabled = false; btn.textContent = "Submit Ticket";
+  });
+
+  // Feedback section toggle
+  document.getElementById("btnToggleFeedback").addEventListener("click", () => {
+    const body  = document.getElementById("fqsfBody");
+    const arrow = document.querySelector(".fqsf-arrow");
+    const open  = body.style.display !== "none";
+    body.style.display     = open ? "none" : "";
+    arrow.style.transform  = open ? "" : "rotate(180deg)";
+  });
+
+  // One-way feedback submit
+  document.getElementById("btnSubmitFeedback").addEventListener("click", async () => {
+    const text  = document.getElementById("fqsfMessage").value.trim();
+    const errEl = document.getElementById("fqsfError");
+    errEl.style.display = "none";
+    if (!text) { errEl.textContent = "Please enter your feedback."; errEl.style.display = ""; return; }
+    const btn = document.getElementById("btnSubmitFeedback");
+    btn.disabled = true; btn.textContent = "Sending…";
+    try {
+      if (sess) await fqCreateTicket("feedback", "Quick Feedback", text);
+      const { feedbackItems } = await chrome.storage.local.get(["feedbackItems"]);
+      await chrome.storage.local.set({ feedbackItems: [...(feedbackItems || []),
+        { text, ts: Date.now(), email: sess?.email }] });
+      document.getElementById("fqsfMessage").value = "";
+      const ok = document.getElementById("fqsfSuccess");
+      ok.style.display = "";
+      btn.style.display = "none";
+      setTimeout(() => { ok.style.display = "none"; btn.style.display = ""; }, 3000);
+    } catch (e) {
+      errEl.textContent = "Failed to send. Please try again."; errEl.style.display = "";
+    }
+    btn.disabled = false; btn.textContent = "Send Feedback";
+  });
+
+  // Initial load
+  if (sess) { _userTickets = await fqGetUserTickets(); }
+  _renderTicketList();
+
+  // Poll for admin replies every 20s while this tab is visible
+  if (_pollInterval) clearInterval(_pollInterval);
+  if (sess) {
+    _pollInterval = setInterval(async () => {
+      const fresh = await fqGetUserTickets();
+      if (JSON.stringify(fresh) !== JSON.stringify(_userTickets)) {
+        _userTickets = fresh;
+        _renderTicketList();
+      }
+    }, 20000);
+  }
+}
+
+// Stop polling when leaving the feedback tab
+document.querySelectorAll(".tab-btn:not([data-tab='feedback'])").forEach(btn => {
+  btn.addEventListener("click", () => { if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; } });
+});
+
+// Click tab manually
+document.querySelector('[data-tab="feedback"]').addEventListener("click", async () => {
+  const sess = await fqGetSession().catch(() => null);
+  _initFeedbackTab(sess);
+});

@@ -11,6 +11,7 @@ const KNOWN_DEVICES = [
 let parts       = [];
 let labourRates = {};
 let dragSrcIdx  = null;
+let isGuestMode = false;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const groupedEl     = document.getElementById("groupedParts");
@@ -39,12 +40,14 @@ KNOWN_DEVICES.forEach(d => {
 // ── Load initial state ────────────────────────────────────────────────────────
 function loadAll() {
   chrome.storage.local.get(
-    ["estimateParts", "labourRates", "currentJob"],
+    ["estimateParts", "labourRates", "currentJob", "taxRate", "shippingCost"],
     (result) => {
       parts       = result.estimateParts || [];
       labourRates = result.labourRates   || {};
       const job   = result.currentJob    || {};
       customerInput.value = job.customerName || "";
+      if (result.taxRate      !== undefined) taxRateInput.value  = result.taxRate;
+      if (result.shippingCost !== undefined) shippingInput.value = result.shippingCost;
       renderGroups();
       renderRates();
       recalc();
@@ -138,7 +141,12 @@ function partHtml(p) {
       <div class="part-name">${esc(p.name)}</div>
       ${srcHtml ? `<div class="part-source">${srcHtml}</div>` : ""}
       <div class="part-price-row">
-        <span class="part-price">$${p.price.toFixed(2)}</span>
+        <div class="part-price-edit">
+          <span class="part-price-sym">$</span>
+          <input class="part-price-input" type="number" min="0" step="0.01"
+            value="${p.price.toFixed(2)}" data-orig="${p.origIdx}"
+            title="Click to edit price" />
+        </div>
         <span class="part-unit">ea</span>
         <span class="part-unit">·</span>
         <div class="part-qty">
@@ -179,10 +187,42 @@ function bindPartEvents() {
     });
   });
 
+  // Labour: update on blur only — prevents cursor escape during typing
   groupedEl.querySelectorAll(".part-labour-input").forEach(input => {
-    input.addEventListener("change", () => {
+    // Track value changes while typing without re-rendering
+    input.addEventListener("input", () => {
+      parts[parseInt(input.dataset.orig)].labour = parseFloat(input.value) || 0;
+    });
+    // Only save + re-render when user leaves the field
+    input.addEventListener("blur", () => {
       parts[parseInt(input.dataset.orig)].labour = parseFloat(input.value) || 0;
       saveParts();
+    });
+    // Prevent the default form submission / re-render on Enter; just blur instead
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+    });
+  });
+
+  // Price: editable, save on blur
+  groupedEl.querySelectorAll(".part-price-input").forEach(input => {
+    input.addEventListener("focus", () => input.select());
+    input.addEventListener("input", () => {
+      const val = parseFloat(input.value);
+      if (!isNaN(val) && val >= 0) parts[parseInt(input.dataset.orig)].price = val;
+    });
+    input.addEventListener("blur", () => {
+      const val = parseFloat(input.value);
+      if (!isNaN(val) && val >= 0) {
+        parts[parseInt(input.dataset.orig)].price = val;
+        saveParts();
+      } else {
+        // Restore previous valid value
+        input.value = parts[parseInt(input.dataset.orig)].price.toFixed(2);
+      }
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
     });
   });
 }
@@ -285,8 +325,18 @@ function recalc() {
   grandEl.textContent       = "$" + grand.toFixed(2);
 }
 
-shippingInput.addEventListener("input", recalc);
-taxRateInput.addEventListener("input",  recalc);
+shippingInput.addEventListener("input", () => {
+  recalc();
+  chrome.storage.local.set({ shippingCost: parseFloat(shippingInput.value) || 0 });
+});
+
+taxRateInput.addEventListener("input", () => {
+  recalc();
+  chrome.storage.local.set({ taxRate: parseFloat(taxRateInput.value) || 0 });
+});
+
+// Select all text on focus for easy replacement
+taxRateInput.addEventListener("focus", () => taxRateInput.select());
 
 // ── Save parts helper ─────────────────────────────────────────────────────────
 function saveParts() {
@@ -517,6 +567,9 @@ document.querySelectorAll(".auth-tab").forEach(btn => {
     btn.classList.add("active");
     document.getElementById("btnAuthSubmit").textContent =
       _authMode === "signin" ? "Sign In" : "Create Account";
+    // Update autocomplete so password managers know whether to save or fill
+    document.getElementById("authPassword").autocomplete =
+      _authMode === "signin" ? "current-password" : "new-password";
     setAuthError(null);
   });
 });
@@ -526,7 +579,9 @@ document.getElementById("btnShowPw").addEventListener("click", () => {
   inp.type  = inp.type === "password" ? "text" : "password";
 });
 
-document.getElementById("btnAuthSubmit").addEventListener("click", async () => {
+// Form submit handles both keyboard Enter and button click
+document.getElementById("authForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
   const email    = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
   const btn      = document.getElementById("btnAuthSubmit");
@@ -536,18 +591,11 @@ document.getElementById("btnAuthSubmit").addEventListener("click", async () => {
     if (_authMode === "signin") await fqSignIn(email, password);
     else                        await fqSignUp(email, password);
     await onAuthSuccess();
-  } catch (e) {
-    setAuthError(e.message);
+  } catch (err) {
+    setAuthError(err.message);
     btn.disabled = false;
     btn.textContent = _authMode === "signin" ? "Sign In" : "Create Account";
   }
-});
-
-document.getElementById("authEmail").addEventListener("keydown", e => {
-  if (e.key === "Enter") document.getElementById("authPassword").focus();
-});
-document.getElementById("authPassword").addEventListener("keydown", e => {
-  if (e.key === "Enter") document.getElementById("btnAuthSubmit").click();
 });
 
 document.getElementById("btnGoogleSignIn").addEventListener("click", async () => {
@@ -563,14 +611,33 @@ document.getElementById("btnGoogleSignIn").addEventListener("click", async () =>
   }
 });
 
+// ── Continue as Guest ─────────────────────────────────────────────────────────
+document.getElementById("btnContinueGuest").addEventListener("click", () => {
+  chrome.storage.local.set({ fqGuestMode: true }, () => {
+    isGuestMode = true;
+    hideAuthOverlay();
+    document.getElementById("guestBanner").style.display = "flex";
+    loadAll();
+    toast("👤 Continuing as guest");
+  });
+});
+
+// Sign In Now from guest banner
+document.getElementById("btnSignInNow").addEventListener("click", () => {
+  document.getElementById("guestBanner").style.display = "none";
+  showAuthOverlay();
+});
+
 async function onAuthSuccess() {
+  isGuestMode = false;
+  await chrome.storage.local.remove(["fqGuestMode"]);
   const sess = await fqGetSession();
   if (!sess) return;
-  // Show user info in header
+  document.getElementById("guestBanner").style.display = "none";
   customerInput.placeholder = `${sess.displayName} · Job #…`;
-  // Pull cloud data, then load UI
   await fqSyncFromCloud();
   hideAuthOverlay();
+  addSignOutBtn(sess);
   loadAll();
 }
 
@@ -586,21 +653,40 @@ function addSignOutBtn(sess) {
   btn.addEventListener("click", async () => {
     if (!confirm("Sign out?")) return;
     await fqSignOut();
+    isGuestMode = false;
     showAuthOverlay();
   });
   document.querySelector(".header-top").appendChild(btn);
 }
 
+// ── Support button → opens Feedback tab in full page ─────────────────────────
+document.getElementById("btnSupport").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("fullpage.html") + "?tab=feedback" });
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
   fqInitAuthUI();
+
+  // Check for existing session first
   const sess = await fqGetSession();
-  if (!sess) {
-    showAuthOverlay();
-  } else {
+  if (sess) {
     customerInput.placeholder = `${sess.displayName} · Job #…`;
     addSignOutBtn(sess);
     await fqSyncFromCloud();
     loadAll();
+    return;
   }
+
+  // Check for guest mode
+  const { fqGuestMode } = await chrome.storage.local.get(["fqGuestMode"]);
+  if (fqGuestMode) {
+    isGuestMode = true;
+    document.getElementById("guestBanner").style.display = "flex";
+    loadAll();
+    return;
+  }
+
+  // Show auth
+  showAuthOverlay();
 })();

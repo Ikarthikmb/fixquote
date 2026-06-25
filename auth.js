@@ -218,3 +218,160 @@ async function fqPushKeys(...keys) {
   for (const k of keys) { if (data[k] !== undefined) payload[k] = data[k]; }
   if (Object.keys(payload).length) await fqPushToCloud(payload);
 }
+
+// ── Admin / global Firestore helpers ──────────────────────────────────────────
+// These operate on arbitrary paths (not user-scoped) — for admin use
+
+// List all documents in a top-level collection
+async function fsListCollection(collPath) {
+  const h = await _fsHeaders();
+  if (!h) return [];
+  const { _uid, ...headers } = h;
+  try {
+    const res = await fetch(`${_FS()}/${collPath}?pageSize=200`, { headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.warn(`[fsListCollection] ${res.status} on ${collPath}:`, err);
+      return [];
+    }
+    const data = await res.json();
+    return (data.documents || []).map(doc => ({
+      id: doc.name.split("/").pop(),
+      ...(doc.fields ? _fromF(doc.fields) : {})
+    }));
+  } catch { return []; }
+}
+
+// Get a document by absolute Firestore path (e.g. "supportTickets/uid123")
+async function fsAbsGet(path) {
+  const h = await _fsHeaders();
+  if (!h) return null;
+  const { _uid, ...headers } = h;
+  try {
+    const res = await fetch(`${_FS()}/${path}`, { headers });
+    if (!res.ok) return null;
+    const doc = await res.json();
+    return doc.fields ? _fromF(doc.fields) : null;
+  } catch { return null; }
+}
+
+// Set / merge a document by absolute path — throws on HTTP error
+async function fsAbsSet(path, data) {
+  const h = await _fsHeaders();
+  if (!h) throw new Error("Not authenticated");
+  const { _uid, ...headers } = h;
+  const res = await fetch(`${_FS()}/${path}`, {
+    method: "PATCH", headers,
+    body: JSON.stringify({ fields: _toF(data) })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const msg = err?.error?.message || res.status;
+    console.warn(`[fsAbsSet] ${res.status} on ${path}:`, err);
+    throw new Error(`Write failed (${msg}) — check Firestore rules`);
+  }
+}
+
+// ── Per-ticket support system ──────────────────────────────────────────────────
+// Path: supportTickets/{uid}  — one Firestore doc per user, contains tickets[]
+// Each ticket: { id, category, subject, status, messages[], createdAt, updatedAt }
+
+function _genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+// Create a new ticket and append to the user's doc; returns ticketId
+async function fqCreateTicket(category, subject, messageText) {
+  const sess = await fqGetSession();
+  if (!sess) throw new Error("Not signed in");
+  const existing = await fsAbsGet(`supportTickets/${sess.uid}`) || {};
+  const tickets  = existing.tickets || [];
+  const now      = Date.now();
+  const ticketId = _genId();
+  tickets.push({
+    id:        ticketId,
+    category,
+    subject:   subject || messageText.slice(0, 72),
+    status:    "open",
+    messages:  [{ type: "user", text: messageText, ts: now, by: sess.email }],
+    createdAt: now,
+    updatedAt: now
+  });
+  await fsAbsSet(`supportTickets/${sess.uid}`, {
+    uid: sess.uid, email: sess.email,
+    displayName: sess.displayName || sess.email,
+    tickets, updatedAt: now
+  });
+  return ticketId;
+}
+
+// Return the signed-in user's own tickets sorted newest-first
+async function fqGetUserTickets() {
+  const sess = await fqGetSession();
+  if (!sess) return [];
+  const doc = await fsAbsGet(`supportTickets/${sess.uid}`);
+  return (doc?.tickets || []).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+// User adds a follow-up message to one of their tickets
+async function fqUserReply(ticketId, text) {
+  const sess = await fqGetSession();
+  if (!sess) throw new Error("Not signed in");
+  const existing = await fsAbsGet(`supportTickets/${sess.uid}`);
+  if (!existing) throw new Error("Ticket doc not found");
+  const tickets = existing.tickets || [];
+  const idx = tickets.findIndex(t => t.id === ticketId);
+  if (idx === -1) throw new Error("Ticket not found");
+  const now = Date.now();
+  tickets[idx].messages = [...(tickets[idx].messages || []),
+    { type: "user", text, ts: now, by: sess.email }];
+  tickets[idx].updatedAt = now;
+  if (tickets[idx].status === "resolved") tickets[idx].status = "open";
+  await fsAbsSet(`supportTickets/${sess.uid}`, { ...existing, tickets, updatedAt: now });
+}
+
+// ── Admin helpers ─────────────────────────────────────────────────────────────
+
+// Flatten all tickets from all user docs into one sorted array (admin use)
+async function fsListAllTickets() {
+  const userDocs = await fsListCollection("supportTickets");
+  const flat = [];
+  for (const doc of userDocs) {
+    for (const t of (doc.tickets || [])) {
+      flat.push({ ...t, uid: doc.uid, email: doc.email,
+        displayName: doc.displayName || doc.email });
+    }
+  }
+  console.log(`[Admin] ${flat.length} tickets across ${userDocs.length} user(s)`);
+  return flat.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+// Admin replies to a specific ticket
+async function fqAdminReply(uid, ticketId, text, adminEmail) {
+  const existing = await fsAbsGet(`supportTickets/${uid}`);
+  if (!existing) throw new Error("User document not found");
+  const tickets = existing.tickets || [];
+  const idx = tickets.findIndex(t => t.id === ticketId);
+  if (idx === -1) throw new Error("Ticket not found");
+  const now = Date.now();
+  tickets[idx].messages = [...(tickets[idx].messages || []),
+    { type: "admin", text, ts: now, by: adminEmail }];
+  tickets[idx].status    = "in_progress";
+  tickets[idx].updatedAt = now;
+  await fsAbsSet(`supportTickets/${uid}`, { ...existing, tickets, updatedAt: now });
+}
+
+// Admin sets ticket status (open / in_progress / resolved)
+async function fqAdminSetStatus(uid, ticketId, status) {
+  const existing = await fsAbsGet(`supportTickets/${uid}`);
+  if (!existing) return;
+  const tickets = existing.tickets || [];
+  const idx = tickets.findIndex(t => t.id === ticketId);
+  if (idx === -1) return;
+  tickets[idx].status    = status;
+  tickets[idx].updatedAt = Date.now();
+  await fsAbsSet(`supportTickets/${uid}`, { ...existing, tickets, updatedAt: Date.now() });
+}
+
+// Publisher / admin email — used as a gate for the admin panel
+const FQ_ADMIN_EMAIL = "karthikmble@gmail.com";
